@@ -11,6 +11,13 @@ class XXMI_PG_shadow_props(bpy.types.PropertyGroup):
         type=bpy.types.Object,
         description="메타데이터를 복사할 원본 그림자 에셋 오브젝트"
     )
+    shadow_offset_layer: bpy.props.IntProperty(
+        name="오프셋(Offset) 레벨",
+        default=3,
+        min=0,
+        max=255,
+        description="그림자를 밀어내는 정도 (0: 밀어내지 않음, 값이 클수록 멀어짐, 권장: 3)"
+    )
 
 classes = (
     XXMI_PG_shadow_props,

@@ -10,8 +10,7 @@ COLOR_LAYER_NAME = "COLOR"
 
 # 버텍스 쉐이더(bcddceab76ee10ce)는 COLOR.R(v2.x) 값에 비례해서
 # 그림자 메쉬를 광원 방향으로 밀어낸다. 0이면 오프셋 없이 헤어와 겹침.
-# 테스트로 검증된 값: 3/255 ≈ 0.01176 (레이어 3 기준)
-SHADOW_COLOR_R = 3 / 255.0
+# 오프셋 레벨은 UI에서 입력받으며 (레벨 / 255.0) 으로 계산된다.
 
 
 # ──────────────────────────────────────────────────────────────
@@ -42,11 +41,11 @@ def _fix_xxmi_metadata(obj, mesh, shadow_ref):
     print(f"  메타데이터: '{shadow_ref.name}' 기준으로 교체 완료")
 
 
-def _convert_color_attribute(mesh):
-    """COLOR 어트리뷰트를 그림자 오프셋용 고정값(SHADOW_COLOR_R)으로 교체.
+def _convert_color_attribute(mesh, offset_level):
+    """COLOR 어트리뷰트를 그림자 오프셋용 고정값으로 교체.
 
     기존 레이어 이름을 유지하면서 타입을 FLOAT_COLOR로 재생성하고,
-    모든 버텍스에 (SHADOW_COLOR_R, 0, 0, 1) 을 균일하게 적용한다.
+    모든 버텍스에 (offset_level/255.0, 0, 0, 1) 을 균일하게 적용한다.
     """
     use_new_api = hasattr(mesh, "color_attributes")
 
@@ -74,11 +73,12 @@ def _convert_color_attribute(mesh):
         mesh.vertex_colors.remove(src_layer)
         new_layer = mesh.vertex_colors.new(name=layer_name)
 
-    shadow_color = (SHADOW_COLOR_R, 0.0, 0.0, 1.0)
+    shadow_r = offset_level / 255.0
+    shadow_color = (shadow_r, 0.0, 0.0, 1.0)
     for cd in new_layer.data:
         cd.color = shadow_color
 
-    print(f"  COLOR: '{layer_name}' → R={SHADOW_COLOR_R:.5f} 로 {len(new_layer.data)}개 버텍스 적용")
+    print(f"  COLOR: '{layer_name}' → R={shadow_r:.5f} 로 {len(new_layer.data)}개 버텍스 적용")
 
 
 def _clean_uv_layers(mesh, shadow_ref):
@@ -128,7 +128,7 @@ def _clean_uv_layers(mesh, shadow_ref):
 # 메인 변환 함수
 # ──────────────────────────────────────────────────────────────
 
-def convert_to_shadow(src_obj, shadow_ref):
+def convert_to_shadow(src_obj, shadow_ref, offset_level):
     """헤어 오브젝트를 XXMI 그림자 오브젝트로 변환.
 
     변환 순서:
@@ -163,7 +163,7 @@ def convert_to_shadow(src_obj, shadow_ref):
     print(f"  Merge by Distance 완료 (거리: {MERGE_DISTANCE})")
 
     # 4. COLOR 어트리뷰트 변환
-    _convert_color_attribute(new_mesh)
+    _convert_color_attribute(new_mesh, offset_level)
 
     # 5. UV 레이어 정리
     _clean_uv_layers(new_mesh, shadow_ref)
@@ -197,7 +197,7 @@ class XXMI_OT_convert_shadow(bpy.types.Operator):
             self.report({'ERROR'}, "Shadow Reference는 Mesh 오브젝트여야 합니다.")
             return {'CANCELLED'}
 
-        convert_to_shadow(props.target_obj, props.shadow_ref)
+        convert_to_shadow(props.target_obj, props.shadow_ref, props.shadow_offset_layer)
         self.report({'INFO'}, "Shadow 변환 완료!")
         return {'FINISHED'}
 
