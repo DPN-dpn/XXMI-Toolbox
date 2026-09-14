@@ -1,5 +1,6 @@
 import bpy
 import bmesh
+from . import template
 
 # ──────────────────────────────────────────────────────────────
 # 상수
@@ -17,12 +18,12 @@ COLOR_LAYER_NAME = "COLOR"
 # 내부 헬퍼 함수
 # ──────────────────────────────────────────────────────────────
 
-def _fix_xxmi_metadata(obj, mesh, shadow_ref):
-    """헤어의 XXMI Custom Properties를 shadow_ref 기준으로 교체.
+def _fix_xxmi_metadata(obj, mesh):
+    """헤어의 XXMI Custom Properties를 템플릿 기준으로 교체.
 
     XXMI Tools는 Custom Properties(fmt, hash 등)를 기반으로
     버텍스 버퍼 포맷을 결정하므로, 그림자 에셋의 포맷 정보를
-    그대로 복사해야 올바른 포맷으로 내보내진다.
+    강제로 주입하여 올바른 포맷으로 내보내지도록 한다.
     """
     # 기존 헤어의 XXMI 속성 제거
     for k in list(obj.keys()):
@@ -32,13 +33,13 @@ def _fix_xxmi_metadata(obj, mesh, shadow_ref):
         if k != '_RNA_UI':
             del mesh[k]
 
-    # shadow_ref의 XXMI 속성 복사
-    for k, v in shadow_ref.items():
+    # 템플릿의 XXMI 속성 주입
+    for k, v in template.SHADOW_OBJECT_PROPS.items():
         obj[k] = v
-    for k, v in shadow_ref.data.items():
+    for k, v in template.SHADOW_MESH_PROPS.items():
         mesh[k] = v
 
-    print(f"  메타데이터: '{shadow_ref.name}' 기준으로 교체 완료")
+    print("  메타데이터: 템플릿 기준으로 교체 완료")
 
 
 def _convert_color_attribute(mesh, offset_level):
@@ -81,62 +82,43 @@ def _convert_color_attribute(mesh, offset_level):
     print(f"  COLOR: '{layer_name}' → R={shadow_r:.5f} 로 {len(new_layer.data)}개 버텍스 적용")
 
 
-def _clean_uv_layers(mesh, shadow_ref):
-    """shadow_ref의 UV 레이어 구성에 맞게 헤어의 UV 레이어를 정리.
+def _clean_uv_layers(mesh):
+    """템플릿의 UV 레이어 구성에 맞게 헤어의 UV 레이어를 정리.
 
     XXMI Tools는 UV 레이어 이름과 순서로 TEXCOORD 슬롯을 결정하므로
-    shadow_ref와 동일한 구성이 필요하다.
-    'TEXCOORD1' 과 'TEXCOORD1.xy' 는 동등하게 취급한다.
+    템플릿과 동일한 구성이 필요하다.
     """
     uv_layers = mesh.uv_layers
+    ref_names = set(template.SHADOW_UV_LAYERS)
 
-    # shadow_ref의 UV 레이어 이름 집합 (원형 + .xy 변형 모두 포함)
-    ref_names = {uv.name for uv in shadow_ref.data.uv_layers}
-    keep_names = set()
-    for name in ref_names:
-        keep_names.add(name)
-        keep_names.add(name[:-3] if name.endswith(".xy") else name + ".xy")
-
-    print(f"  UV 보존 목록: {sorted(keep_names)}")
-
-    # 보존 목록에 없는 레이어 제거
-    for name in [uv.name for uv in uv_layers if uv.name not in keep_names]:
+    # 템플릿에 없는 레이어 제거
+    for name in [uv.name for uv in uv_layers if uv.name not in ref_names]:
         uv = uv_layers.get(name)
         if uv:
             uv_layers.remove(uv)
             print(f"  UV 제거: '{name}'")
 
-    # shadow_ref에 있는데 메쉬에 없는 레이어 생성
+    # 템플릿에 있는데 메쉬에 없는 레이어 생성
     existing = {uv.name for uv in uv_layers}
     for ref_name in ref_names:
-        variants = {ref_name, ref_name + ".xy"} if not ref_name.endswith(".xy") \
-                   else {ref_name, ref_name[:-3]}
-        if not variants & existing:
+        if ref_name not in existing:
             uv_layers.new(name=ref_name)
             print(f"  UV 생성: '{ref_name}'")
-
-    # XXMI 호환: TEXCOORD1.xy 가 있으면 TEXCOORD.xy 도 필요
-    existing = {uv.name for uv in uv_layers}
-    has_tc1 = bool({"TEXCOORD1", "TEXCOORD1.xy"} & existing)
-    has_tc0 = bool({"TEXCOORD", "TEXCOORD.xy"} & existing)
-    if has_tc1 and not has_tc0:
-        uv_layers.new(name="TEXCOORD.xy")
-        print("  UV 생성: 'TEXCOORD.xy' (XXMI Tools 호환용)")
 
 
 # ──────────────────────────────────────────────────────────────
 # 메인 변환 함수
 # ──────────────────────────────────────────────────────────────
 
-def convert_to_shadow(src_obj, shadow_ref, offset_level):
+def convert_to_shadow(src_obj, offset_level):
     """헤어 오브젝트를 XXMI 그림자 오브젝트로 변환.
 
     변환 순서:
       1. 오브젝트 복제 및 이름 설정
-      2. XXMI 메타데이터를 shadow_ref 기준으로 교체
+      2. XXMI 메타데이터를 템플릿 기준으로 교체
       3. Merge by Distance (중복 버텍스 제거)
       4. COLOR 어트리뷰트를 그림자 오프셋용 값으로 교체
-      5. UV 레이어를 shadow_ref 기준으로 정리
+      5. UV 레이어를 템플릿 기준으로 정리
     """
     print(f"\n[Shadow 변환 시작] '{src_obj.name}'")
 
@@ -149,7 +131,7 @@ def convert_to_shadow(src_obj, shadow_ref, offset_level):
     new_mesh = shadow_obj.data
 
     # 2. XXMI 메타데이터 교체
-    _fix_xxmi_metadata(shadow_obj, new_mesh, shadow_ref)
+    _fix_xxmi_metadata(shadow_obj, new_mesh)
 
     # 3. Merge by Distance
     bm = bmesh.new()
@@ -166,7 +148,7 @@ def convert_to_shadow(src_obj, shadow_ref, offset_level):
     _convert_color_attribute(new_mesh, offset_level)
 
     # 5. UV 레이어 정리
-    _clean_uv_layers(new_mesh, shadow_ref)
+    _clean_uv_layers(new_mesh)
 
     print(f"[Shadow 변환 완료] → '{shadow_obj.name}'\n")
     return shadow_obj
@@ -185,12 +167,10 @@ class XXMI_OT_convert_shadow(bpy.types.Operator):
     @classmethod
     def poll(cls, context):
         props = context.scene.xxmi_shadow_props
-        return props.target_obj is not None and props.target_obj.type == 'MESH' and props.shadow_ref is not None and props.shadow_ref.type == 'MESH'
-
     def execute(self, context):
         props = context.scene.xxmi_shadow_props
 
-        convert_to_shadow(props.target_obj, props.shadow_ref, props.shadow_offset_layer)
+        convert_to_shadow(props.target_obj, props.shadow_offset_layer)
         self.report({'INFO'}, "Shadow 변환 완료!")
         return {'FINISHED'}
 

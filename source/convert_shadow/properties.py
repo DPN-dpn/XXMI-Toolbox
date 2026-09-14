@@ -4,13 +4,9 @@ class XXMI_PG_shadow_props(bpy.types.PropertyGroup):
     target_obj: bpy.props.PointerProperty(
         name="변환할 오브젝트",
         type=bpy.types.Object,
-        description="그림자로 변환할 앞머리 오브젝트"
+        description="그림자로 변환할 오브젝트"
     )
-    shadow_ref: bpy.props.PointerProperty(
-        name="그림자 에셋",
-        type=bpy.types.Object,
-        description="그림자 에셋 오브젝트"
-    )
+
     shadow_offset_layer: bpy.props.IntProperty(
         name="오프셋 레벨",
         default=3,
