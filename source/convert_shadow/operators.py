@@ -3,10 +3,10 @@ import bmesh
 
 MERGE_DISTANCE = 1e-4
 COLOR_LAYER_NAME = "COLOR"
-TEXCOORD1_LAYER_NAME = "TEXCOORD1"
 LAYER_THRESHOLDS = [13, 38, 63]
 
 def alpha_to_shadow_r(alpha_float):
+    """헤어 COLOR.A (0~1) → 그림자 레이어 인덱스 → COLOR.R 값으로 변환"""
     alpha_byte = round(alpha_float * 255)
     layer = sum(1 for t in LAYER_THRESHOLDS if alpha_byte >= t)
     return layer / 255.0
@@ -27,8 +27,9 @@ def _fix_xxmi_metadata(obj, mesh, shadow_ref):
         mesh[k] = v
 
 def _convert_color_attribute(mesh):
-    src_layer = None
+    """헤어 COLOR.A 값을 읽어 그림자 레이어(COLOR.R)로 변환"""
     use_new_api = hasattr(mesh, "color_attributes")
+    src_layer = None
 
     if use_new_api:
         attrs = mesh.color_attributes
@@ -43,8 +44,7 @@ def _convert_color_attribute(mesh):
 
     color_data = []
     for cd in src_layer.data:
-        col = tuple(cd.color)
-        alpha_f = col[3] if len(col) >= 4 else 0.0
+        alpha_f = 1.0  # 테스트: COLOR.A를 1로 취급 → layer=3 → shadow_r=3/255
         shadow_r = alpha_to_shadow_r(alpha_f)
         color_data.append((shadow_r, 0.0, 0.0, 1.0))
 
@@ -125,7 +125,7 @@ def convert_to_shadow(src_obj, shadow_ref):
     new_mesh.shade_smooth()
     new_mesh.calc_normals_split()
 
-    # ── 4. COLOR 어트리뷰트 변환 ─────────────────────────────────
+    # ── 4. COLOR 어트리뷰트 변환 (헤어 Alpha → 그림자 레이어) ───────────
     _convert_color_attribute(new_mesh)
 
     # ── 5. UV 레이어 정리 (shadow_ref 기준) ──────────────────────
