@@ -2,7 +2,7 @@ import bpy
 
 class XXMI_PG_shadow_props(bpy.types.PropertyGroup):
     target_obj: bpy.props.PointerProperty(
-        name="변환할 오브젝트",
+        name="타겟",
         type=bpy.types.Object,
         description="그림자로 변환할 오브젝트"
     )

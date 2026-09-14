@@ -7,7 +7,7 @@ class XXMI_TOOLBOX_PT_updater(Panel):
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "XXMI Toolbox"
-    bl_order = 3
+    bl_order = 9
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):

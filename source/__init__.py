@@ -1,9 +1,11 @@
 from . import updator
 from . import convert_shadow
+from . import copy_metadata
 
 modules = [
     convert_shadow,
     updator,
+    copy_metadata,
 ]
 
 def register():

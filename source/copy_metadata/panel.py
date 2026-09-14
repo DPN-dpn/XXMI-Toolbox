@@ -1,33 +1,31 @@
 import bpy
 
-class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
+class XXMI_TOOLBOX_PT_copy_props_panel(bpy.types.Panel):
     bl_label = ""
-    bl_idname = "XXMI_TOOLBOX_PT_shadow_panel"
+    bl_idname = "XXMI_TOOLBOX_PT_copy_props_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "XXMI Toolbox"
-    bl_order = 1
+    bl_order = 0
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw_header(self, context):
         layout = self.layout
-        layout.label(text="그림자 변환", icon='SHADING_RENDERED')
+        layout.label(text="커스텀 속성 복사", icon='COPYDOWN')
 
     def draw(self, context):
         layout = self.layout
-        props = context.scene.xxmi_shadow_props
+        props = context.scene.xxmi_copy_props
 
         col = layout.column(align=True)
         col.prop(props, "target_obj")
-        col.prop(props, "shadow_ref")
-        col.separator()
-        col.prop(props, "shadow_offset_layer")
-
+        col.prop(props, "source_obj")
+        
         layout.separator()
-        layout.operator("object.xxmi_convert_shadow", text="변환 실행", icon='SHADING_RENDERED')
+        layout.operator("object.xxmi_copy_props", text="속성 복사 실행", icon='COPYDOWN')
 
 classes = (
-    XXMI_TOOLBOX_PT_shadow_panel,
+    XXMI_TOOLBOX_PT_copy_props_panel,
 )
 
 def register():
