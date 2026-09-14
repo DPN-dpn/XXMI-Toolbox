@@ -2,12 +2,12 @@ import bpy
 
 class XXMI_PG_copy_props(bpy.types.PropertyGroup):
     target_obj: bpy.props.PointerProperty(
-        name="타겟",
+        name="타겟 오브젝트",
         type=bpy.types.Object,
         description="커스텀 속성을 덮어씌울 오브젝트"
     )
     source_obj: bpy.props.PointerProperty(
-        name="소스",
+        name="소스 오브젝트",
         type=bpy.types.Object,
         description="커스텀 속성을 복사해 올 원본 오브젝트"
     )

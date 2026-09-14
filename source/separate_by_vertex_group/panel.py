@@ -1,36 +1,33 @@
 import bpy
 
-class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
+class XXMI_TOOLBOX_PT_separate_mesh_panel(bpy.types.Panel):
     bl_label = ""
-    bl_idname = "XXMI_TOOLBOX_PT_shadow_panel"
+    bl_idname = "XXMI_TOOLBOX_PT_separate_mesh_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "XXMI Toolbox"
-    bl_order = 1
+    bl_order = 2
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw_header(self, context):
         layout = self.layout
-        layout.label(text="그림자 변환", icon='SHADING_RENDERED')
+        layout.label(text="버텍스 그룹 기반 메쉬 분리", icon='GROUP_VERTEX')
 
     def draw(self, context):
         layout = self.layout
         layout.use_property_split = True
         layout.use_property_decorate = False
-        
-        props = context.scene.xxmi_shadow_props
 
+        props = context.scene.xxmi_separate_mesh_props
+        
         col = layout.column(align=True)
         col.prop(props, "target_obj")
-        col.prop(props, "shadow_ref")
-        col.separator()
-        col.prop(props, "shadow_offset_layer")
-
+        
         layout.separator()
-        layout.operator("object.xxmi_convert_shadow", text="변환 실행", icon='SHADING_RENDERED')
+        layout.operator("object.xxmi_separate_mesh", text="분리 실행", icon='GROUP_VERTEX')
 
 classes = (
-    XXMI_TOOLBOX_PT_shadow_panel,
+    XXMI_TOOLBOX_PT_separate_mesh_panel,
 )
 
 def register():

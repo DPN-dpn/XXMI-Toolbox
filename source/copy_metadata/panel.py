@@ -15,11 +15,14 @@ class XXMI_TOOLBOX_PT_copy_props_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        layout.use_property_split = True
+        layout.use_property_decorate = False
+        
         props = context.scene.xxmi_copy_props
 
         col = layout.column(align=True)
-        col.prop(props, "target_obj")
         col.prop(props, "source_obj")
+        col.prop(props, "target_obj")
         
         layout.separator()
         layout.operator("object.xxmi_copy_props", text="속성 복사 실행", icon='COPYDOWN')

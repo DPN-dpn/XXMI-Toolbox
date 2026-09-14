@@ -1,11 +1,13 @@
 from . import updator
 from . import convert_shadow
 from . import copy_metadata
+from . import separate_by_vertex_group
 
 modules = [
-    convert_shadow,
     updator,
+    convert_shadow,
     copy_metadata,
+    separate_by_vertex_group,
 ]
 
 def register():
