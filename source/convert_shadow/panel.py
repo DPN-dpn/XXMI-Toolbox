@@ -18,7 +18,7 @@ class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
         col.prop(props, "shadow_offset_layer")
 
         layout.separator()
-        layout.operator("object.xxmi_convert_shadow", text="변환 실행", icon='MOD_SHRINKWRAP')
+        layout.operator("object.xxmi_convert_shadow", text="변환 실행", icon='SHADING_RENDERED')
 
 classes = (
     XXMI_TOOLBOX_PT_shadow_panel,
