@@ -3,13 +3,7 @@ import bmesh
 
 MERGE_DISTANCE = 1e-4
 COLOR_LAYER_NAME = "COLOR"
-LAYER_THRESHOLDS = [13, 38, 63]
-
-def alpha_to_shadow_r(alpha_float):
-    """헤어 COLOR.A (0~1) → 그림자 레이어 인덱스 → COLOR.R 값으로 변환"""
-    alpha_byte = round(alpha_float * 255)
-    layer = sum(1 for t in LAYER_THRESHOLDS if alpha_byte >= t)
-    return layer / 255.0
+SHADOW_LAYER3_COLOR = (3 / 255.0, 0.0, 0.0, 1.0)
 
 def _fix_xxmi_metadata(obj, mesh, shadow_ref):
     """메인 헤어의 메타데이터를 지우고, 그림자 모델의 메타데이터로 교체"""
@@ -27,7 +21,7 @@ def _fix_xxmi_metadata(obj, mesh, shadow_ref):
         mesh[k] = v
 
 def _convert_color_attribute(mesh):
-    """헤어 COLOR.A 값을 읽어 그림자 레이어(COLOR.R)로 변환"""
+    """COLOR 어트리뷰트를 레이어 3(오프셋 값)으로 고정하여 변환"""
     use_new_api = hasattr(mesh, "color_attributes")
     src_layer = None
 
@@ -42,12 +36,6 @@ def _convert_color_attribute(mesh):
 
     if src_layer is None: return
 
-    color_data = []
-    for cd in src_layer.data:
-        alpha_f = 1.0  # 테스트: COLOR.A를 1로 취급 → layer=3 → shadow_r=3/255
-        shadow_r = alpha_to_shadow_r(alpha_f)
-        color_data.append((shadow_r, 0.0, 0.0, 1.0))
-
     old_name = src_layer.name
     if use_new_api:
         mesh.color_attributes.remove(src_layer)
@@ -56,8 +44,8 @@ def _convert_color_attribute(mesh):
         mesh.vertex_colors.remove(src_layer)
         new_layer = mesh.vertex_colors.new(name=old_name)
 
-    for i, cd in enumerate(new_layer.data):
-        cd.color = color_data[i]
+    for cd in new_layer.data:
+        cd.color = SHADOW_LAYER3_COLOR
 
 def _clean_uv_layers(mesh, shadow_ref):
     """원본 그림자 에셋의 UV 레이어 구성을 기준으로 정리"""
