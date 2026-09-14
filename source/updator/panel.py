@@ -6,7 +6,7 @@ class XXMI_TOOLBOX_PT_updater(Panel):
     bl_idname = "XXMI_TOOLBOX_PT_updater"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "멀티 토글"
+    bl_category = "XXMI Toolbox"
     bl_order = 3
     bl_options = {"DEFAULT_CLOSED"}
 
