@@ -6,6 +6,11 @@ class XXMI_PG_shadow_props(bpy.types.PropertyGroup):
         type=bpy.types.Object,
         description="그림자로 변환할 오브젝트"
     )
+    shadow_ref: bpy.props.PointerProperty(
+        name="그림자 에셋",
+        type=bpy.types.Object,
+        description="메타데이터를 복사할 원본 그림자 에셋 오브젝트"
+    )
 
     shadow_offset_layer: bpy.props.IntProperty(
         name="오프셋 레벨",
