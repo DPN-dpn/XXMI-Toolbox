@@ -1,7 +1,7 @@
 import bpy
 
 class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
-    bl_label = "그림자 변환 (Shadow)"
+    bl_label = "그림자 변환"
     bl_idname = "XXMI_TOOLBOX_PT_shadow_panel"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -18,7 +18,7 @@ class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
         col.prop(props, "shadow_offset_layer")
 
         layout.separator()
-        layout.operator("object.xxmi_convert_shadow", text="변환 실행 (Convert)", icon='MOD_SHRINKWRAP')
+        layout.operator("object.xxmi_convert_shadow", text="변환 실행", icon='MOD_SHRINKWRAP')
 
 classes = (
     XXMI_TOOLBOX_PT_shadow_panel,

@@ -179,23 +179,16 @@ def convert_to_shadow(src_obj, shadow_ref, offset_level):
 class XXMI_OT_convert_shadow(bpy.types.Operator):
     bl_idname     = "object.xxmi_convert_shadow"
     bl_label      = "그림자 오브젝트로 변환"
-    bl_description = "선택된 Target Hair를 XXMI 그림자 오브젝트로 변환합니다"
+    bl_description = "선택된 오브젝트를 그림자 오브젝트로 변환합니다"
     bl_options    = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
         props = context.scene.xxmi_shadow_props
-        return props.target_obj is not None and props.target_obj.type == 'MESH'
+        return props.target_obj is not None and props.target_obj.type == 'MESH' and props.shadow_ref is not None and props.shadow_ref.type == 'MESH'
 
     def execute(self, context):
         props = context.scene.xxmi_shadow_props
-
-        if not props.shadow_ref:
-            self.report({'ERROR'}, "Shadow Reference를 지정해주세요!")
-            return {'CANCELLED'}
-        if props.shadow_ref.type != 'MESH':
-            self.report({'ERROR'}, "Shadow Reference는 Mesh 오브젝트여야 합니다.")
-            return {'CANCELLED'}
 
         convert_to_shadow(props.target_obj, props.shadow_ref, props.shadow_offset_layer)
         self.report({'INFO'}, "Shadow 변환 완료!")
