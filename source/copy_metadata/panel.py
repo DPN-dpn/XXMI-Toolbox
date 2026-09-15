@@ -15,6 +15,13 @@ class XXMI_TOOLBOX_PT_copy_props_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        
+        # 패널 내부 우측 상단에 툴팁 배치
+        row = layout.row()
+        row.alignment = 'RIGHT'
+        op = row.operator("object.xxmi_help_tooltip", text="", icon='QUESTION', emboss=False)
+        op.text = "선택한 소스 메쉬의 XXMI 커스텀 속성(오브젝트/메쉬)을 타겟 메쉬로 덮어씌웁니다"
+
         layout.use_property_split = True
         layout.use_property_decorate = False
         

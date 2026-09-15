@@ -29,7 +29,7 @@ def copy_custom_properties(target_obj, source_obj):
 class XXMI_OT_copy_props(bpy.types.Operator):
     bl_idname = "object.xxmi_copy_props"
     bl_label = "속성 덮어쓰기"
-    bl_description = "소스 오브젝트의 커스텀 속성을 타겟 오브젝트에 복사(덮어쓰기)합니다"
+    bl_description = "소스 오브젝트의 커스텀 속성을 타겟 오브젝트에 복사합니다"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod

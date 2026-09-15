@@ -15,6 +15,13 @@ class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
+        
+        # 패널 내부 우측 상단에 툴팁 배치
+        row = layout.row()
+        row.alignment = 'RIGHT'
+        op = row.operator("object.xxmi_help_tooltip", text="", icon='QUESTION', emboss=False)
+        op.text = "타겟 오브젝트를 그림자 오브젝트로 변환합니다"
+
         layout.use_property_split = True
         layout.use_property_decorate = False
         

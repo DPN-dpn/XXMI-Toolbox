@@ -185,7 +185,7 @@ def separate_by_vertex_group_clusters(context, obj):
 class XXMI_OT_separate_mesh(bpy.types.Operator):
     bl_idname = "object.xxmi_separate_mesh"
     bl_label = "버텍스 그룹 기준 메쉬 분리"
-    bl_description = "버텍스 그룹과 물리적 연결성을 바탕으로 메쉬를 여러 오브젝트로 쪼개고 자동 네이밍합니다"
+    bl_description = "버텍스 그룹을 기반으로 오브젝트를 쪼갭니다"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod

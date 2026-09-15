@@ -12,6 +12,7 @@ class XXMI_TOOLBOX_PT_updater(Panel):
 
     def draw(self, context):
         layout = self.layout
+
         scene = context.scene
         latest_version = scene.get("xxmi_toolbox_latest_version", "")
         current_version = scene.get("xxmi_toolbox_current_version", "")

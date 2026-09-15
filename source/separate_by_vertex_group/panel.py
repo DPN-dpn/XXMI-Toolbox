@@ -11,10 +11,17 @@ class XXMI_TOOLBOX_PT_separate_mesh_panel(bpy.types.Panel):
 
     def draw_header(self, context):
         layout = self.layout
-        layout.label(text="버텍스 그룹 기반 메쉬 분리", icon='GROUP_VERTEX')
+        layout.label(text="버텍스 그룹 기준 메쉬 분리", icon='GROUP_VERTEX')
 
     def draw(self, context):
         layout = self.layout
+        
+        # 패널 내부 우측 상단에 툴팁 배치
+        row = layout.row()
+        row.alignment = 'RIGHT'
+        op = row.operator("object.xxmi_help_tooltip", text="", icon='QUESTION', emboss=False)
+        op.text = "버텍스 그룹과 엣지 연결성을 분석하여 하나의 메쉬를 여러 파츠로 쪼개고 컬렉션으로 깔끔하게 정리합니다"
+
         layout.use_property_split = True
         layout.use_property_decorate = False
 
