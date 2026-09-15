@@ -1,10 +1,10 @@
 bl_info = {
     "name": "XXMI Toolbox",
     "author": "DPN",
-    "version": (1, 0, 0),
+    "version": (1, 1, 0),
     "blender": (2, 80, 0),
     "location": "N-Panel > Tool > XXMI Toolbox",
-    "description": "XXMI모드의 여러 툴을 한 번에 관리합니다.",
+    "description": "XXMI 모딩을 위한 유용한 툴을 모아놓은 에디터 확장 기능",
     "category": "3D View",
 }
 
