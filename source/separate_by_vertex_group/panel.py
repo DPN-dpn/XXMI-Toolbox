@@ -29,6 +29,7 @@ class XXMI_TOOLBOX_PT_separate_mesh_panel(bpy.types.Panel):
         
         col = layout.column(align=True)
         col.prop(props, "target_obj")
+        col.prop(props, "ignore_connectivity")
         
         layout.separator()
         layout.operator("object.xxmi_separate_mesh", text="분리 실행", icon='GROUP_VERTEX')

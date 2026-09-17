@@ -1,10 +1,10 @@
 import bpy
 
-def separate_by_vertex_group_clusters(context, obj):
+def separate_by_vertex_group_clusters(context, obj, ignore_connectivity=False):
     """
     버텍스 그룹과 물리적 연결성(Edge)을 바탕으로 메쉬를 클러스터(덩어리)로 묶어 분리합니다.
     - 대상 메쉬의 이름으로 새 컬렉션을 만들고 그 안에서 작업이 진행됩니다.
-    - 물리적으로 연결되어 있거나 (Edge 공유)
+    - 물리적으로 연결되어 있거나 (Edge 공유, ignore_connectivity가 False일 때)
     - 하나의 버텍스에 여러 그룹이 할당되어 있으면
     해당 버텍스 그룹들은 하나의 클러스터로 병합됩니다.
     """
@@ -69,12 +69,13 @@ def separate_by_vertex_group_clusters(context, obj):
                 union(first_g, g)
 
     # 3-2. 엣지로 연결된 두 버텍스의 그룹들도 병합 (물리적 연결)
-    for edge in obj.data.edges:
-        groups1 = v_groups[edge.vertices[0]]
-        groups2 = v_groups[edge.vertices[1]]
-        for g1 in groups1:
-            for g2 in groups2:
-                union(g1, g2)
+    if not ignore_connectivity:
+        for edge in obj.data.edges:
+            groups1 = v_groups[edge.vertices[0]]
+            groups2 = v_groups[edge.vertices[1]]
+            for g1 in groups1:
+                for g2 in groups2:
+                    union(g1, g2)
 
     # 4. 각 버텍스를 최종 클러스터(루트 그룹) 별로 분류
     cluster_verts = {}
@@ -200,7 +201,7 @@ class XXMI_OT_separate_mesh(bpy.types.Operator):
             self.report({'ERROR'}, "분리할 대상(타겟) 메쉬를 지정해주세요!")
             return {'CANCELLED'}
 
-        success, message = separate_by_vertex_group_clusters(context, props.target_obj)
+        success, message = separate_by_vertex_group_clusters(context, props.target_obj, props.ignore_connectivity)
         if success:
             self.report({'INFO'}, message)
         else:

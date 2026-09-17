@@ -6,6 +6,11 @@ class XXMI_PG_separate_mesh_props(bpy.types.PropertyGroup):
         type=bpy.types.Object,
         description="분리할 대상 메쉬 오브젝트"
     )
+    ignore_connectivity: bpy.props.BoolProperty(
+        name="메쉬 강제 분리",
+        description="체크 시 물리적으로 연결되어 있더라도 버텍스 그룹이 다르면 강제로 분리합니다",
+        default=False
+    )
 
 classes = (
     XXMI_PG_separate_mesh_props,
