@@ -3,7 +3,7 @@ from . import updator
 from . import convert_shadow
 from . import copy_metadata
 from . import separate_by_vertex_group
-from . import mixamo_rig
+from . import rename_mixamo_bones
 
 class XXMI_OT_help_tooltip(bpy.types.Operator):
     bl_idname = "object.xxmi_help_tooltip"
@@ -23,7 +23,7 @@ modules = [
     convert_shadow,
     copy_metadata,
     separate_by_vertex_group,
-    mixamo_rig,
+    rename_mixamo_bones,
 ]
 
 def register():

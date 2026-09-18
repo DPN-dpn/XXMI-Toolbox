@@ -1,18 +1,18 @@
 import bpy
 
-class XXMI_OT_convert_mixamo_rig(bpy.types.Operator):
-    bl_idname = "object.xxmi_convert_mixamo_rig"
+class XXMI_OT_rename_mixamo_bones(bpy.types.Operator):
+    bl_idname = "object.xxmi_rename_mixamo_bones"
     bl_label = "Mixamo 본 이름 변환"
     bl_description = "Mixamo 리깅 본 이름을 블렌더 표준(.L, .R)으로 변환합니다"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(cls, context):
-        props = context.scene.xxmi_mixamo_rig_props
+        props = context.scene.xxmi_rename_mixamo_bones_props
         return props.target_obj is not None and props.target_obj.type == 'ARMATURE'
 
     def execute(self, context):
-        props = context.scene.xxmi_mixamo_rig_props
+        props = context.scene.xxmi_rename_mixamo_bones_props
         obj = props.target_obj
         
         if not obj or obj.type != 'ARMATURE':
@@ -47,7 +47,7 @@ class XXMI_OT_convert_mixamo_rig(bpy.types.Operator):
         return {'FINISHED'}
 
 classes = (
-    XXMI_OT_convert_mixamo_rig,
+    XXMI_OT_rename_mixamo_bones,
 )
 
 def register():

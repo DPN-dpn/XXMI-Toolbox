@@ -1,6 +1,6 @@
 import bpy
 
-class XXMI_PG_mixamo_rig_props(bpy.types.PropertyGroup):
+class XXMI_PG_rename_mixamo_bones_props(bpy.types.PropertyGroup):
     target_obj: bpy.props.PointerProperty(
         name="타겟 본",
         type=bpy.types.Object,
@@ -9,15 +9,15 @@ class XXMI_PG_mixamo_rig_props(bpy.types.PropertyGroup):
     )
 
 classes = (
-    XXMI_PG_mixamo_rig_props,
+    XXMI_PG_rename_mixamo_bones_props,
 )
 
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
-    bpy.types.Scene.xxmi_mixamo_rig_props = bpy.props.PointerProperty(type=XXMI_PG_mixamo_rig_props)
+    bpy.types.Scene.xxmi_rename_mixamo_bones_props = bpy.props.PointerProperty(type=XXMI_PG_rename_mixamo_bones_props)
 
 def unregister():
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)
-    del bpy.types.Scene.xxmi_mixamo_rig_props
+    del bpy.types.Scene.xxmi_rename_mixamo_bones_props
