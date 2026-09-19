@@ -27,7 +27,7 @@ class XXMI_PT_face_animation(bpy.types.Panel):
             "2. 타겟 모드의 ini 파일을 선택합니다.\n"
             "3. '표정 연동 실행' 버튼을 누르면 타겟 모드에 쉐이더와 버퍼가 자동으로 적용됩니다.\n\n"
             "[맵핑 옵션]\n"
-            "- 맵핑 방식: 타겟 모드가 원본 에셋의 표정을 따라갈 수학적 방식을 결정합니다.\n"
+            "- 맵핑 방식: 타겟 모드가 원본 에셋의 표정을 따라갈 수학적 방식을 결정합니다. 가까운 페이스 보간 추천.\n"
             "- 형태 맞춤: 타겟 모드와 원본 에셋의 조형 차이로 이목구비가 지나치게 어긋날 경우,\n"
             "            원본 에셋을 불러와 이목구비를 타겟 모드에 맞게 변형한 후 지정하여 맵핑 정보로 추가합니다.\n\n"
             "[고급 눈 깜빡임]\n"
@@ -82,6 +82,7 @@ class XXMI_PT_face_animation(bpy.types.Panel):
             
         layout.separator()
         layout.operator("object.xxmi_export_face_animation", text="표정 연동 실행", icon='PLAY')
+        layout.operator("object.xxmi_rollback_face_animation", text="연동 롤백", icon='RECOVER_LAST')
 
 classes = (
     XXMI_PT_face_animation,

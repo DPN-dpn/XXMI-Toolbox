@@ -490,9 +490,117 @@ class XXMI_OT_file_picker(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+class XXMI_OT_rollback_face_animation(bpy.types.Operator):
+    bl_idname = "object.xxmi_rollback_face_animation"
+    bl_label = "연동 롤백 (취소)"
+    bl_description = "이미 표정 연동이 적용된 타겟 모드의 ini 파일을 선택하여 연동을 취소(Rollback)합니다"
+    
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    filter_glob: bpy.props.StringProperty(default="*.ini", options={'HIDDEN'})
+    
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+        
+    def execute(self, context):
+        ini_path = self.filepath
+        if not os.path.isfile(ini_path):
+            self.report({'ERROR'}, "파일을 찾을 수 없습니다.")
+            return {'CANCELLED'}
+            
+        with open(ini_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+            
+        custom_filename = None
+        in_extracted = False
+        for line in lines:
+            l = line.strip().lower()
+            if l == '[resourcecustomfaceextracted]':
+                in_extracted = True
+            elif l.startswith('[') and l.endswith(']'):
+                in_extracted = False
+                
+            if in_extracted and l.startswith('filename'):
+                parts = line.split('=', 1)
+                if len(parts) == 2:
+                    custom_filename = parts[1].strip()
+                    break
+                    
+        if not custom_filename:
+            self.report({'WARNING'}, "이 ini 파일은 연동된 흔적이 없어 롤백할 필요가 없습니다.")
+            return {'CANCELLED'}
+            
+        original_resource = None
+        current_res = None
+        for line in lines:
+            l = line.strip()
+            if l.startswith('[') and l.endswith(']'):
+                current_res = l[1:-1].strip()
+            elif current_res and current_res.lower() != 'resourcecustomfaceextracted' and l.lower().startswith('filename'):
+                parts = line.split('=', 1)
+                if len(parts) == 2 and parts[1].strip().lower() == custom_filename.lower():
+                    original_resource = current_res
+                    break
+                    
+        if not original_resource:
+            self.report({'ERROR'}, f"원본 버퍼({custom_filename})를 가리키는 기존 리소스를 찾을 수 없어 롤백에 실패했습니다.")
+            return {'CANCELLED'}
+            
+        out_lines = []
+        skip_mode = False
+        
+        for line in lines:
+            l = line.strip().lower()
+            
+            if l == "[customshaderfaceanimation]":
+                skip_mode = True
+                while len(out_lines) > 0:
+                    prev = out_lines[-1].strip()
+                    if prev == "" or prev.startswith(";"):
+                        out_lines.pop()
+                    else:
+                        break
+                continue
+                
+            if skip_mode:
+                continue
+                
+            if l.startswith("run ") and "customshaderfaceanimation" in l:
+                continue
+                
+            if l.startswith("vb0 ") or l.startswith("vb0="):
+                if "resourcefaceanimated" in l:
+                    indent = line[:len(line) - len(line.lstrip())]
+                    out_lines.append(f"{indent}vb0 = {original_resource}\n")
+                    continue
+                    
+            out_lines.append(line)
+            
+        with open(ini_path, 'w', encoding='utf-8') as f:
+            f.writelines(out_lines)
+            
+        mod_folder = os.path.dirname(ini_path)
+        for junk in ["FaceOriginalNeutral.buf", "FaceAnimationMap.buf", "FaceAnimation.hlsl"]:
+            junk_path = os.path.join(mod_folder, junk)
+            if os.path.exists(junk_path):
+                try:
+                    os.remove(junk_path)
+                except:
+                    pass
+                    
+        def draw_popup(self, context):
+            self.layout.label(text="[연동 롤백 완료]", icon='INFO')
+            self.layout.label(text="ini 파일 복원 및 생성되었던 파일이 삭제되었습니다.")
+            
+        context.window_manager.popup_menu(draw_popup, title="롤백 완료", icon='INFO')
+        self.report({'INFO'}, "표정 연동이 롤백되었습니다.")
+        
+        return {'FINISHED'}
+
 classes = (
     XXMI_OT_export_face_animation,
     XXMI_OT_file_picker,
+    XXMI_OT_rollback_face_animation,
 )
 
 def register():
