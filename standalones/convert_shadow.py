@@ -3,10 +3,8 @@ import bmesh
 
 # ==============================================================================
 # [ 사용 방법 ]
-# 1. 3D 뷰포트에서 '원본 그림자 에셋'을 먼저 클릭합니다. (메타데이터 추출용)
-# 2. Ctrl 키를 누른 상태로 '그림자로 변환할 메쉬'를 클릭하여 추가 선택합니다.
-#    (이때 마지막에 선택한 타겟 메쉬가 노란색 윤곽선의 활성 오브젝트가 되어야 합니다)
-# 3. 이 스크립트를 실행(Run) 합니다.
+# 1. 3D 뷰포트에서 그림자로 변환할 메쉬 하나만 선택합니다.
+# 2. 이 스크립트를 실행(Run) 합니다.
 # ==============================================================================
 
 # ==============================================================================
@@ -15,26 +13,114 @@ import bmesh
 # 그림자를 밀어내는 정도 (0: 밀어내지 않음, 값이 클수록 멀어짐, 권장: 3)
 SHADOW_OFFSET_LEVEL = 3
 
+# ==============================================================================
+# [ 상수 ]
+# ==============================================================================
 # Merge by Distance 허용 거리
 MERGE_DISTANCE = 1e-4
 
 COLOR_LAYER_NAME = "COLOR"
 
+SHADOW_TEMPLATE = {
+    "object_properties": {
+        "3DMigoto:VBLayout": [
+            {
+                "SemanticName": "POSITION",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 0,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "NORMAL",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 12,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "TANGENT",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32A32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 24,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "BLENDWEIGHTS",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32A32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 40,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "BLENDINDICES",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32A32_UINT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 56,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "COLOR",
+                "SemanticIndex": 0,
+                "Format": "R32G32B32A32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 72,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            },
+            {
+                "SemanticName": "TEXCOORD",
+                "SemanticIndex": 1,
+                "Format": "R32G32_FLOAT",
+                "InputSlot": 0,
+                "AlignedByteOffset": 88,
+                "InputSlotClass": "per-vertex",
+                "InstanceDataStepRate": 0
+            }
+        ],
+        "3DMigoto:Topology": "trianglelist",
+        "3DMigoto:VB0Stride": 96,
+        "3DMigoto:FirstVertex": 0,
+        "3DMigoto:FlipWinding": False,
+        "3DMigoto:FlipNormal": False,
+        "3DMigoto:FlipMesh": False,
+        "3DMigoto:IBFormat": "DXGI_FORMAT_R16_UINT",
+        "3DMigoto:FirstIndex": 0,
+        "3DMigoto:TEXCOORD1.xy": {
+            "flip_v": True
+        }
+    },
+    "mesh_properties": {},
+    "uv_layers": [
+        "TEXCOORD1.xy"
+    ]
+}
+
 # ==============================================================================
 # [ 로직 ]
 # ==============================================================================
 
-def _fix_xxmi_metadata(obj, mesh, shadow_ref):
+def _apply_shadow_template(obj, mesh):
     for k in list(obj.keys()):
         if k != '_RNA_UI': del obj[k]
     for k in list(mesh.keys()):
         if k != '_RNA_UI': del mesh[k]
 
-    for k, v in shadow_ref.items():
+    for k, v in SHADOW_TEMPLATE["object_properties"].items():
         obj[k] = v
-    for k, v in shadow_ref.data.items():
+    for k, v in SHADOW_TEMPLATE["mesh_properties"].items():
         mesh[k] = v
-    print(f"  메타데이터: '{shadow_ref.name}' 기준으로 교체 완료")
+    print("  메타데이터: 템플릿 기준으로 교체 완료")
 
 def _convert_color_attribute(mesh, offset_level):
     use_new_api = hasattr(mesh, "color_attributes")
@@ -65,10 +151,10 @@ def _convert_color_attribute(mesh, offset_level):
         cd.color = shadow_color
     print(f"  COLOR: '{layer_name}' → R={shadow_r:.5f} 로 {len(new_layer.data)}개 버텍스 적용")
 
-def _clean_uv_layers(mesh, shadow_ref):
+def _clean_uv_layers(mesh):
     uv_layers = mesh.uv_layers
 
-    ref_names = {uv.name for uv in shadow_ref.data.uv_layers}
+    ref_names = set(SHADOW_TEMPLATE["uv_layers"])
     keep_names = set()
     for name in ref_names:
         keep_names.add(name)
@@ -94,7 +180,7 @@ def _clean_uv_layers(mesh, shadow_ref):
         uv_layers.new(name="TEXCOORD.xy")
         print("  UV 생성: 'TEXCOORD.xy' (XXMI Tools 호환용)")
 
-def convert_to_shadow(src_obj, shadow_ref, offset_level):
+def convert_to_shadow(src_obj, offset_level):
     print(f"\n[Shadow 변환 시작] '{src_obj.name}'")
 
     # 1. 복제
@@ -106,7 +192,7 @@ def convert_to_shadow(src_obj, shadow_ref, offset_level):
     new_mesh = shadow_obj.data
 
     # 2. 메타데이터 교체
-    _fix_xxmi_metadata(shadow_obj, new_mesh, shadow_ref)
+    _apply_shadow_template(shadow_obj, new_mesh)
 
     # 3. Merge by Distance
     bm = bmesh.new()
@@ -123,7 +209,7 @@ def convert_to_shadow(src_obj, shadow_ref, offset_level):
     _convert_color_attribute(new_mesh, offset_level)
 
     # 5. UV 레이어 정리
-    _clean_uv_layers(new_mesh, shadow_ref)
+    _clean_uv_layers(new_mesh)
 
     print(f"[Shadow 변환 완료] → '{shadow_obj.name}'\n")
     return shadow_obj
@@ -138,22 +224,15 @@ def main():
             self.layout.label(text=message)
         bpy.context.window_manager.popup_menu(draw, title="오류", icon='ERROR')
 
-    if len(selected) != 2:
-        show_error("정확히 2개의 오브젝트를 선택해주세요.\n(원본 그림자 에셋 먼저 클릭 -> Ctrl+클릭으로 변환할 메쉬 선택)")
+    if len(selected) != 1:
+        show_error("그림자로 변환할 메쉬 오브젝트 1개만 선택해주세요.")
         return
 
     if not target_obj or target_obj.type != 'MESH':
-        show_error("변환할 타겟 메쉬가 활성화(Active)되지 않았습니다.\nCtrl+클릭으로 타겟 메쉬를 마지막에 선택해주세요.")
+        show_error("메쉬가 선택되지 않았거나 메쉬가 아닙니다.")
         return
 
-    shadow_refs = [obj for obj in selected if obj != target_obj]
-    if not shadow_refs or shadow_refs[0].type != 'MESH':
-        show_error("그림자 에셋(Reference) 오브젝트를 찾을 수 없거나 메쉬가 아닙니다.")
-        return
-
-    shadow_ref = shadow_refs[0]
-
-    convert_to_shadow(target_obj, shadow_ref, SHADOW_OFFSET_LEVEL)
+    convert_to_shadow(target_obj, SHADOW_OFFSET_LEVEL)
 
     # 작업 완료 후 새로 생성된 그림자 오브젝트 선택
     bpy.ops.object.select_all(action='DESELECT')
