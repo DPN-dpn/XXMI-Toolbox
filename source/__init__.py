@@ -4,6 +4,7 @@ from . import convert_shadow
 from . import copy_metadata
 from . import separate_by_vertex_group
 from . import rename_mixamo_bones
+from . import face_animation
 
 class XXMI_OT_help_tooltip(bpy.types.Operator):
     bl_idname = "object.xxmi_help_tooltip"
@@ -24,6 +25,7 @@ modules = [
     copy_metadata,
     separate_by_vertex_group,
     rename_mixamo_bones,
+    face_animation,
 ]
 
 def register():
