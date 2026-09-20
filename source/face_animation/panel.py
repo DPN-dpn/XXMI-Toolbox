@@ -25,7 +25,7 @@ class XXMI_PT_face_animation(bpy.types.Panel):
             "얼굴 모드에 표정과 립싱크를 연동합니다.\n\n"
             "[사용 방법]\n"
             "1. 원본 캐릭터의 에셋 hash.json 및 얼굴 컴포넌트를 선택합니다.\n"
-            "2. 타겟 모드의 ini 파일을 선택합니다.\n"
+            "2. 타겟 모드의 폴더를 선택합니다.\n"
             "3. '표정 연동 실행' 버튼을 누르면 타겟 모드에 쉐이더와 버퍼가 자동으로 적용됩니다.\n\n"
             "[맵핑 옵션]\n"
             "- 맵핑 방식: 타겟 모드가 원본 에셋의 표정을 따라갈 수학적 방식을 결정합니다. 가까운 페이스 보간 추천.\n"
@@ -49,10 +49,9 @@ class XXMI_PT_face_animation(bpy.types.Panel):
         col.prop(props, "selected_component")
         
         row = col.row(align=True)
-        row.prop(props, "target_ini", text="타겟 모드 ini")
-        op = row.operator("object.xxmi_file_picker", text="", icon='FILE_FOLDER')
+        row.prop(props, "target_ini", text="타겟 모드 폴더")
+        op = row.operator("object.xxmi_dir_picker", text="", icon='FILE_FOLDER')
         op.prop_name = "target_ini"
-        op.filter_glob = "*.ini"
         
         layout.separator()
         

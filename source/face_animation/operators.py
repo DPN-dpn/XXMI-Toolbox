@@ -7,6 +7,104 @@ import math
 from mathutils import Vector
 from mathutils.bvhtree import BVHTree
 
+def find_target_ini(folder_path, blend_hash):
+    """지정된 폴더 및 하위 폴더에서 해당 얼굴 해시를 포함하는 ini 파일을 찾습니다. (disabled로 시작하면 무시)"""
+    for root, dirs, files in os.walk(folder_path):
+        dirs[:] = [d for d in dirs if not d.lower().startswith('disabled')]
+        for file in files:
+            if file.lower().endswith('.ini') and not file.lower().startswith('disabled'):
+                ini_path = os.path.join(root, file)
+                try:
+                    with open(ini_path, 'r', encoding='utf-8') as f:
+                        for line in f:
+                            if line.strip().lower() == f"hash = {blend_hash.lower()}":
+                                return ini_path
+                except:
+                    pass
+    return None
+
+def do_rollback_internal(ini_path):
+    """INI 파일 경로를 받아 애니메이션 관련 생성 파일을 삭제하고 INI를 원상 복구합니다."""
+    if not os.path.isfile(ini_path):
+        return
+
+    mod_folder = os.path.dirname(ini_path)
+
+    map_pattern = re.compile(r"^FaceAnimationMap_\d+\.buf$")
+    hlsl_pattern = re.compile(r"^FaceAnimation_\d+\.hlsl$")
+    
+    try:
+        for fname in os.listdir(mod_folder):
+            if fname in ("FaceOriginalNeutral.buf", "FaceAnimationMap.buf", "FaceAnimation.hlsl") or map_pattern.match(fname) or hlsl_pattern.match(fname):
+                fpath = os.path.join(mod_folder, fname)
+                os.remove(fpath)
+    except:
+        pass
+
+    try:
+        with open(ini_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+
+        extracted_files = {}
+        current_idx = None
+        for line in lines:
+            l = line.strip().lower()
+            if l.startswith('[') and l.endswith(']'):
+                sec = l[1:-1].strip()
+                if sec.startswith("resourcecustomfaceextracted"):
+                    parts = sec.split("_")
+                    current_idx = parts[-1] if len(parts) > 1 and parts[-1].isdigit() else ""
+                else:
+                    current_idx = None
+            elif current_idx is not None and l.startswith("filename"):
+                parts = line.split('=', 1)
+                if len(parts) == 2:
+                    extracted_files[current_idx] = parts[1].strip().lower().replace('\\', '/')
+
+        orig_resources = {}
+        current_res = None
+        for line in lines:
+            l = line.strip()
+            if l.startswith('[') and l.endswith(']'):
+                current_res = l[1:-1].strip()
+            elif current_res and not current_res.lower().startswith('resourcecustomfaceextracted') and l.lower().startswith('filename'):
+                parts = line.split('=', 1)
+                if len(parts) == 2:
+                    fname = parts[1].strip().lower().replace('\\', '/')
+                    for idx, ex_fname in extracted_files.items():
+                        if fname == ex_fname:
+                            orig_resources[idx] = current_res
+
+        out_lines = []
+        for line in lines:
+            l = line.strip().lower()
+            if l == "; xxmi face animation auto-injected":
+                while out_lines and out_lines[-1].strip() in ("", "; =========================================================="):
+                    out_lines.pop()
+                break  
+                
+            if l.startswith("run ") and "customshaderfaceanimation" in l:
+                continue
+                
+            if l.startswith("vb0 ") or l.startswith("vb0="):
+                if "resourcefaceanimated" in l:
+                    res_val = line.split("=", 1)[1].strip()
+                    parts = res_val.split("_")
+                    idx = parts[-1] if len(parts) > 1 and parts[-1].isdigit() else ""
+                    
+                    orig_res = orig_resources.get(idx)
+                    if orig_res:
+                        indent = line[:len(line) - len(line.lstrip())]
+                        out_lines.append(f"{indent}vb0 = {orig_res}\n")
+                    continue
+                    
+            out_lines.append(line)
+
+        with open(ini_path, 'w', encoding='utf-8') as f:
+            f.writelines(out_lines)
+    except:
+        pass
+
 class XXMI_OT_export_face_animation(bpy.types.Operator):
     bl_idname = "object.xxmi_export_face_animation"
     bl_label = "표정 연동 실행"
@@ -17,7 +115,7 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
         
         dump_hash_json = props.dump_hash_json
         selected_comp = props.selected_component
-        target_ini = props.target_ini
+        target_ini_input = props.target_ini
         
         if not os.path.isfile(dump_hash_json):
             self.report({'ERROR'}, "에셋 hash.json 파일을 올바르게 지정해주세요.")
@@ -29,13 +127,16 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
             self.report({'ERROR'}, "얼굴 컴포넌트를 선택해주세요.")
             return {'CANCELLED'}
             
-        if not os.path.isfile(target_ini):
-            self.report({'ERROR'}, "타겟 모드 ini 파일을 올바르게 지정해주세요.")
+        if not target_ini_input:
+            self.report({'ERROR'}, "타겟 모드 ini 파일(또는 폴더)을 지정해주세요.")
             return {'CANCELLED'}
             
         try:
             # 1. hash.json 파싱
             hash_path = os.path.join(dump_folder, "hash.json")
+            if not os.path.isfile(hash_path):
+                hash_path = dump_hash_json
+                
             with open(hash_path, 'r', encoding='utf-8') as f:
                 hash_data = json.load(f)
                 
@@ -52,7 +153,23 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
                 self.report({'ERROR'}, "컴포넌트에 필요한 해시(position_vb, ib)가 부족합니다.")
                 return {'CANCELLED'}
                 
-            # 2. 덤프 텍스트 파일 찾기
+            # 2. 타겟 INI 찾기 및 롤백 초기화
+            if os.path.isdir(target_ini_input):
+                target_ini = find_target_ini(target_ini_input, blend_vb_hash)
+            elif os.path.isfile(target_ini_input):
+                target_ini = target_ini_input
+            else:
+                target_ini = None
+
+            if not target_ini or not os.path.isfile(target_ini):
+                self.report({'ERROR'}, f"{target_ini_input} 경로에서 얼굴 컴포넌트(hash={blend_vb_hash})가 있는 유효한 ini 파일을 찾을 수 없습니다.")
+                return {'CANCELLED'}
+                
+            # 초기화 (이미 적용된 내용 롤백)
+            do_rollback_internal(target_ini)
+            mod_folder = os.path.dirname(target_ini)
+                
+            # 3. 덤프 텍스트 파일 찾기
             vb0_txt = self.find_file_with_hash(dump_folder, pos_vb_hash, "-vb0=")
             ib_txt = self.find_file_with_hash(dump_folder, ib_hash, "-ib=")
             
@@ -60,46 +177,58 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
                 self.report({'ERROR'}, f"에셋 폴더에서 {selected_comp}의 -vb0 또는 -ib 텍스트 파일을 찾을 수 없습니다.")
                 return {'CANCELLED'}
                 
-            # 3. .ini 파싱 및 커스텀 buf 경로 추적
-            custom_buf_name, ini_lines = self.parse_and_get_custom_buf(target_ini, blend_vb_hash)
-            if not custom_buf_name:
+            # 4. .ini 파싱 및 다중 커스텀 buf 경로 추적
+            buffers_list, ini_lines = self.parse_and_get_custom_bufs(target_ini, blend_vb_hash)
+            if not buffers_list:
                 self.report({'ERROR'}, "ini 파일에서 커스텀 얼굴 버퍼를 추적할 수 없습니다.")
                 return {'CANCELLED'}
                 
-            mod_folder = os.path.dirname(target_ini)
-            custom_buf_path = os.path.join(mod_folder, custom_buf_name)
-            if not os.path.isfile(custom_buf_path):
-                self.report({'ERROR'}, f"커스텀 버퍼 파일이 존재하지 않습니다: {custom_buf_name}")
-                return {'CANCELLED'}
-                
-            # 4. txt 파싱 및 BVHTree 생성, FaceOriginalNeutral.buf 굽기
+            # 5. txt 파싱 및 FaceOriginalNeutral.buf 굽기
             orig_vertices, orig_polygons, orig_vertex_count = self.parse_dump_txt(vb0_txt, ib_txt, os.path.join(mod_folder, "FaceOriginalNeutral.buf"))
             
             bvh_vertices = orig_vertices
             if props.aligned_orig_base:
                 mesh = props.aligned_orig_base.data
                 if len(mesh.vertices) == orig_vertex_count:
-                    # 유저가 눈코입을 맞춰둔 오브젝트의 좌표를 사용하여 BVHTree 생성!
                     bvh_vertices = [v.co for v in mesh.vertices]
                 else:
                     self.report({'WARNING'}, f"형태 맞춤 오브젝트의 버텍스 개수({len(mesh.vertices)})가 덤프({orig_vertex_count})와 다릅니다. 원본 좌표를 사용합니다.")
                     
             bvh = BVHTree.FromPolygons(bvh_vertices, orig_polygons)
             
-            # 5. FaceAnimationMap.buf 굽기
-            custom_vertex_count = self.build_animation_map(custom_buf_path, bvh, bvh_vertices, orig_polygons, os.path.join(mod_folder, "FaceAnimationMap.buf"), props.mapping_method)
+            # 6. 다중 버퍼(애니메이션 프레임) 맵핑 진행
+            custom_buffers_info = []
             
-            # 6. HLSL 생성
-            self.export_hlsl(mod_folder, props.use_custom_blink, custom_vertex_count, orig_vertex_count)
+            wm = context.window_manager
+            wm.progress_begin(0, len(buffers_list))
+            
+            for idx, (res_key, buf_filename) in enumerate(buffers_list):
+                custom_buf_path = os.path.join(mod_folder, buf_filename)
+                if not os.path.isfile(custom_buf_path):
+                    self.report({'ERROR'}, f"커스텀 버퍼 파일이 존재하지 않습니다: {buf_filename}")
+                    wm.progress_end()
+                    return {'CANCELLED'}
+                    
+                map_out_path = os.path.join(mod_folder, f"FaceAnimationMap_{idx}.buf")
+                custom_vertex_count = self.build_animation_map(
+                    custom_buf_path, bvh, bvh_vertices, orig_polygons, 
+                    map_out_path, props.mapping_method
+                )
+                
+                self.export_hlsl(mod_folder, props.use_custom_blink, custom_vertex_count, orig_vertex_count, idx)
+                custom_buffers_info.append((res_key, buf_filename, custom_vertex_count))
+                wm.progress_update(idx + 1)
+                
+            wm.progress_end()
             
             # 7. INI 주입 (Inject)
-            self.inject_ini(target_ini, ini_lines, custom_buf_name, blend_vb_hash, props.use_custom_blink)
+            self.inject_ini(target_ini, ini_lines, custom_buffers_info, blend_vb_hash, props.use_custom_blink)
             
             # 완료 알림
             def draw_popup(self, context):
                 self.layout.label(text="[표정 연동 완료]", icon='INFO')
-                self.layout.label(text="모드 폴더에 버퍼와 쉐이더가 성공적으로 생성되었습니다.")
-                self.layout.label(text="모드 ini 파일에 쉐이더 구문이 적용되었습니다.")
+                self.layout.label(text=f"총 {len(buffers_list)}개의 버퍼가 성공적으로 연동되었습니다.")
+                self.layout.label(text="모드 ini 파일에 다중 쉐이더 구문이 적용되었습니다.")
 
             context.window_manager.popup_menu(draw_popup, title="연동 완료", icon='INFO')
             self.report({'INFO'}, "표정 연동이 완료되었습니다.")
@@ -117,73 +246,72 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
                 return os.path.join(folder, f)
         return None
         
-    def parse_and_get_custom_buf(self, ini_path, blend_hash):
+    def parse_and_get_custom_bufs(self, ini_path, blend_hash):
         with open(ini_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
             
-        in_target_section = False
-        resource_key = None
-        custom_buf_name = None
+        hash_section = None
+        in_any_section = None
         
-        # 1차 패스: TextureOverride에서 vb0 리소스 이름 찾기
         for line in lines:
             l = line.strip().lower()
             if l.startswith('[') and l.endswith(']'):
-                in_target_section = False
+                in_any_section = l[1:-1].strip()
+            elif l == f"hash = {blend_hash.lower()}":
+                hash_section = in_any_section
                 
-            if l == f"hash = {blend_hash.lower()}":
-                in_target_section = True
-                
-            if in_target_section:
-                if l.startswith("vb0 ") or l.startswith("vb0="):
-                    parts = l.split("=", 1)
-                    if len(parts) == 2:
-                        res_val = parts[1].strip()
-                        # 사용자가 수정한 파일이 아닌 순정 상태라면 원래 리소스를 저장
-                        if res_val.lower() != "resourcefaceanimated":
-                            resource_key = res_val
-                            
-            # 만약 이미 주입된 파일이라면 [CustomShaderFaceAnimation] 섹션 근처에 cs-u5 가 있음
-            # 이건 섹션 상관없이 전역으로 찾아도 무방함
-            if l.startswith("cs-u5") and "copy" in l:
-                parts = l.split("copy", 1)
-                if len(parts) == 2:
-                    potential_key = parts[1].strip()
-                    if potential_key.lower() != "resourcefaceexpressionbase": 
-                        # 만약 템플릿의 기본값이 아니라면 이걸 사용 (주입된 상태)
-                        # 단, 리소스 키가 없을 때만 덮어씀
-                        if not resource_key:
-                            resource_key = potential_key
-                    else:
-                        # 템플릿 기본값이어도 resource_key가 없으면 쓴다.
-                        if not resource_key:
-                            resource_key = potential_key
-                            
-        if not resource_key:
-            return None, lines
+        if not hash_section:
+            return [], lines
             
-        # 2차 패스: Resource 섹션에서 filename 찾기
-        in_res_section = False
+        target_commands = [hash_section.lower()]
+        in_hash_section = False
         for line in lines:
-            l = line.strip()
+            l = line.strip().lower()
             if l.startswith('[') and l.endswith(']'):
-                # 대소문자 구분 없이 비교
-                in_res_section = (l[1:-1].strip().lower() == resource_key.lower())
-                
-            if in_res_section and l.lower().startswith("filename"):
-                parts = l.split("=", 1)
-                if len(parts) == 2:
-                    custom_buf_name = parts[1].strip()
-                    break
+                in_hash_section = (l[1:-1].strip() == hash_section.lower())
+            elif in_hash_section and (l.startswith("run ") or l.startswith("run=")):
+                run_val = l.split("=", 1)[1].strip()
+                if run_val not in target_commands:
+                    target_commands.append(run_val)
                     
-        return custom_buf_name, lines
+        resource_keys = [] 
+        in_target_cmd = False
+        
+        for line in lines:
+            l = line.strip().lower()
+            if l.startswith('[') and l.endswith(']'):
+                in_target_cmd = (l[1:-1].strip() in target_commands)
+                
+            if in_target_cmd:
+                if l.startswith("vb0 ") or l.startswith("vb0="):
+                    res_val = l.split("=", 1)[1].strip()
+                    if not res_val.startswith("resourcefaceanimated") and res_val not in resource_keys:
+                        resource_keys.append(res_val)
+                elif l.startswith("cs-u5") and "copy" in l:
+                    res_val = l.split("copy", 1)[1].strip()
+                    if res_val != "resourcefaceexpressionbase" and res_val not in resource_keys:
+                        resource_keys.append(res_val)
+                        
+        buffers = []
+        for res_key in resource_keys:
+            in_res = False
+            for line in lines:
+                l = line.strip().lower()
+                if l.startswith('[') and l.endswith(']'):
+                    in_res = (l[1:-1].strip() == res_key.lower())
+                elif in_res and l.startswith("filename"):
+                    parts = line.split("=", 1)
+                    if len(parts) == 2:
+                        buffers.append((res_key, parts[1].strip()))
+                        break
+                        
+        return buffers, lines
         
     def parse_dump_txt(self, vb0_path, ib_path, out_buf_path):
         vertices = []
         buf_data = bytearray()
         vertex_count = 0
         
-        # vb0.txt 파싱 및 buf 생성
         with open(vb0_path, 'r', encoding='utf-8') as f:
             current_pos = [0.0, 0.0, 0.0]
             current_norm = [0.0, 0.0, 0.0]
@@ -207,7 +335,6 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
                     vals = l.split("TANGENT:")[1].strip().split(",")
                     current_tang = [float(v.strip()) for v in vals]
                     
-                    # TANGENT까지 읽었으면 버퍼에 쓴다 (순서: POS, NORM, TANG)
                     buf_data.extend(struct.pack('<3f', *current_pos))
                     buf_data.extend(struct.pack('<3f', *current_norm))
                     buf_data.extend(struct.pack('<4f', *current_tang))
@@ -215,7 +342,6 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
         with open(out_buf_path, 'wb') as f:
             f.write(buf_data)
             
-        # ib.txt 파싱
         polygons = []
         with open(ib_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
@@ -310,8 +436,8 @@ class XXMI_OT_export_face_animation(bpy.types.Operator):
             f.write(map_data)
             
         return custom_vertex_count
-
-    def export_hlsl(self, directory, use_custom_blink, custom_vtx_count, orig_vtx_count):
+        
+    def export_hlsl(self, directory, use_custom_blink, custom_vtx_count, orig_vtx_count, suffix_idx):
         hlsl_code = f"""// Transfer live pre-skinning facial deformation to the custom face.
 struct Vertex {{
     float3 position;
@@ -329,19 +455,11 @@ StructuredBuffer<Vertex> Live : register(t50);
 StructuredBuffer<Vertex> Neutral : register(t51);
 StructuredBuffer<Attachment> Map : register(t52);
 RWStructuredBuffer<Vertex> Output : register(u5);
-"""
 
-        hlsl_code += """
-float blinkAmount(uint probe) {
-    return 0.0;
-}
-
-float3 residual(uint index, float2 blink) {
+float3 residual(uint index) {{
     return Live[index].position - Neutral[index].position;
-}
-"""
+}}
 
-        hlsl_code += f"""
 [numthreads(64, 1, 1)]
 void main(uint3 threadID : SV_DispatchThreadID) {{
     uint i = threadID.x;
@@ -353,9 +471,9 @@ void main(uint3 threadID : SV_DispatchThreadID) {{
     float3 delta = 0;
     [unroll] for (uint j = 0; j < 3; ++j) {{
         if (a.firstWeights[j] != 0)
-            delta += residual(a.first[j], float2(0,0)) * a.firstWeights[j];
+            delta += residual(a.first[j]) * a.firstWeights[j];
         if (a.secondWeights[j] != 0)
-            delta += residual(a.second[j], float2(0,0)) * a.secondWeights[j];
+            delta += residual(a.second[j]) * a.secondWeights[j];
     }}
     
     Vertex vertex = Output[i];
@@ -363,114 +481,101 @@ void main(uint3 threadID : SV_DispatchThreadID) {{
     Output[i] = vertex;
 }}
 """
-        with open(os.path.join(directory, "FaceAnimation.hlsl"), 'w', encoding='utf-8') as f:
+        with open(os.path.join(directory, f"FaceAnimation_{suffix_idx}.hlsl"), 'w', encoding='utf-8') as f:
             f.write(hlsl_code)
             
-    def inject_ini(self, ini_path, lines, custom_buf_name, blend_hash, use_custom_blink):
-        # 1. 파일 상단에 [CustomShaderFaceAnimation] 및 Resource 자동 추가
-        # 이미 있는지 확인
-        has_custom_shader = False
-        for l in lines:
-            if "[CustomShaderFaceAnimation]" in l:
-                has_custom_shader = True
-                break
+    def inject_ini(self, ini_path, lines, custom_buffers, blend_hash, use_custom_blink):
+        hash_section = None
+        in_any_section = None
+        
+        for line in lines:
+            l = line.strip().lower()
+            if l.startswith('[') and l.endswith(']'):
+                in_any_section = l[1:-1].strip()
+            elif l == f"hash = {blend_hash.lower()}":
+                hash_section = in_any_section
                 
-        # 2. [TextureOverride] 섹션 내 수정
+        target_commands = [hash_section.lower()] if hash_section else []
+        in_hash_section = False
+        for line in lines:
+            l = line.strip().lower()
+            if l.startswith('[') and l.endswith(']'):
+                in_hash_section = (l[1:-1].strip() == hash_section.lower()) if hash_section else False
+            elif in_hash_section and (l.startswith("run ") or l.startswith("run=")):
+                run_val = l.split("=", 1)[1].strip()
+                if run_val not in target_commands:
+                    target_commands.append(run_val)
+                    
         out_lines = []
-        in_target_section = False
+        in_target_cmd = False
         in_draw_type_1 = False
         
         for i, line in enumerate(lines):
             l = line.strip().lower()
             if l.startswith('[') and l.endswith(']'):
-                in_target_section = False
+                in_target_cmd = (l[1:-1].strip() in target_commands)
                 in_draw_type_1 = False
                 
-            if l == f"hash = {blend_hash.lower()}":
-                in_target_section = True
-                
-            if in_target_section:
+            if in_target_cmd:
                 if "if draw_type" in l and "1" in l:
                     in_draw_type_1 = True
                 elif "endif" in l or "elif" in l:
-                    if in_draw_type_1:
-                        in_draw_type_1 = False
-                        
-                # 덮어쓰기 로직
-                if in_draw_type_1:
-                    # vb0 수정
-                    if l.startswith("vb0 ") or l.startswith("vb0="):
-                        if "resourcefaceanimated" not in l:
-                            # 탭(들여쓰기) 유지
+                    in_draw_type_1 = False
+                    
+                if in_draw_type_1 or not any("if draw_type" in x.lower() for x in lines):
+                    if (l.startswith("vb0 ") or l.startswith("vb0=")) and "resourcefaceanimated" not in l:
+                        res_val = line.split("=", 1)[1].strip()
+                        idx = -1
+                        for j, (rk, _, _) in enumerate(custom_buffers):
+                            if rk.lower() == res_val.lower():
+                                idx = j
+                                break
+                        if idx != -1:
                             indent = line[:len(line) - len(line.lstrip())]
-                            out_lines.append(f"{indent}run = CustomShaderFaceAnimation\n")
-                            out_lines.append(f"{indent}vb0 = ResourceFaceAnimated\n")
-                            continue # 원래 vb0 라인 건너뜀
-                    # 중복 방지
-                    if l.startswith("run ") and "customshaderfaceanimation" in l:
-                        continue
-                        
+                            out_lines.append(f"{indent}run = CustomShaderFaceAnimation_{idx}\n")
+                            out_lines.append(f"{indent}vb0 = ResourceFaceAnimated_{idx}\n")
+                            continue
+                            
             out_lines.append(line)
             
-        # 3. 하단에 Custom Shader 파트 텍스트 주입
-        if not has_custom_shader:
-            # Dispatch 횟수 계산 (커스텀 버텍스 수)
-            custom_size = os.path.getsize(os.path.join(os.path.dirname(ini_path), custom_buf_name))
-            v_count = custom_size // 40
+        appended_ini = "\n; ==========================================================\n; XXMI Face Animation Auto-Injected\n; ==========================================================\n"
+        appended_ini += "[ResourceFaceOriginalNeutral]\ntype = StructuredBuffer\nstride = 40\nfilename = FaceOriginalNeutral.buf\n\n"
+        appended_ini += "[ResourceFaceLive]\ntype = StructuredBuffer\nstride = 40\n\n"
+        
+        for idx, (res_key, buf_filename, v_count) in enumerate(custom_buffers):
             dispatch_groups = math.ceil(v_count / 64.0)
-            
-            custom_resource_name = "ResourceFaceExpressionBase" # 기본값
-            # 실제 ini의 리소스 이름을 쓰거나 복사본을 쓰거나
-            # 쉽게 하기 위해 ini에서 찾은 리소스 이름을 쓴다.
-            # 하지만 위에서 찾은 리소스가 custom_resource_name 이 됨
-            
-            # 우리는 이미 custom_buf_name을 알고 있으므로, Resource를 하나 새로 파거나,
-            # 기존 리소스를 활용할 수 있다.
-            # 가장 안전한 방법: 우리가 직접 새 Resource 블록을 만들고 거길 가리킨다!
-            
-            appended_ini = f"""
-
-; ==========================================================
-; XXMI Face Animation Auto-Injected
-; ==========================================================
-[CustomShaderFaceAnimation]
-cs = FaceAnimation.hlsl
+            block = f"""[CustomShaderFaceAnimation_{idx}]
+cs = FaceAnimation_{idx}.hlsl
 ResourceFaceLive = copy vb0
 cs-t50 = ref ResourceFaceLive
 cs-t51 = ref ResourceFaceOriginalNeutral
-cs-t52 = ref ResourceFaceAnimationMap
-cs-u5 = copy ResourceCustomFaceExtracted
-ResourceFaceAnimated = ref cs-u5
+cs-t52 = ref ResourceFaceAnimationMap_{idx}
+cs-u5 = copy ResourceCustomFaceExtracted_{idx}
+ResourceFaceAnimated_{idx} = ref cs-u5
 Dispatch = {dispatch_groups}, 1, 1
 cs-u5 = null
 cs-t50 = null
 cs-t51 = null
 cs-t52 = null
 
-[ResourceFaceLive]
-type = StructuredBuffer
-stride = 40
+[ResourceFaceAnimated_{idx}]
 
-[ResourceFaceAnimated]
-
-[ResourceFaceOriginalNeutral]
-type = StructuredBuffer
-stride = 40
-filename = FaceOriginalNeutral.buf
-
-[ResourceFaceAnimationMap]
+[ResourceFaceAnimationMap_{idx}]
 type = StructuredBuffer
 stride = 48
-filename = FaceAnimationMap.buf
+filename = FaceAnimationMap_{idx}.buf
 
-[ResourceCustomFaceExtracted]
+[ResourceCustomFaceExtracted_{idx}]
 type = StructuredBuffer
 stride = 40
-filename = {custom_buf_name}
-; ==========================================================
+filename = {buf_filename}
+
 """
-            out_lines.append(appended_ini)
+            appended_ini += block
             
+        appended_ini += "; ==========================================================\n"
+        out_lines.append(appended_ini)
+        
         with open(ini_path, 'w', encoding='utf-8') as f:
             f.writelines(out_lines)
 
@@ -490,116 +595,63 @@ class XXMI_OT_file_picker(bpy.types.Operator):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
 
+class XXMI_OT_dir_picker(bpy.types.Operator):
+    bl_idname = "object.xxmi_dir_picker"
+    bl_label = "폴더 선택"
+    
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
+    prop_name: bpy.props.StringProperty(options={'HIDDEN'})
+    
+    def execute(self, context):
+        setattr(context.scene.xxmi_face_anim_props, self.prop_name, self.directory)
+        return {'FINISHED'}
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
 class XXMI_OT_rollback_face_animation(bpy.types.Operator):
     bl_idname = "object.xxmi_rollback_face_animation"
-    bl_label = "연동 롤백 (취소)"
-    bl_description = "이미 표정 연동이 적용된 타겟 모드의 ini 파일을 선택하여 연동을 롤백합니다"
+    bl_label = "연동 롤백"
+    bl_description = "이미 표정 연동이 적용된 타겟 모드의 폴더를 선택하여 연동을 롤백합니다"
     
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
-    filter_glob: bpy.props.StringProperty(default="*.ini", options={'HIDDEN'})
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
     
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
         return {'RUNNING_MODAL'}
         
     def execute(self, context):
-        ini_path = self.filepath
-        if not os.path.isfile(ini_path):
-            self.report({'ERROR'}, "파일을 찾을 수 없습니다.")
+        target_path = self.directory
+        if os.path.isfile(target_path):
+            do_rollback_internal(target_path)
+        elif os.path.isdir(target_path):
+            found = False
+            for root, dirs, files in os.walk(target_path):
+                dirs[:] = [d for d in dirs if not d.lower().startswith('disabled')]
+                for file in files:
+                    if file.lower().endswith('.ini') and not file.lower().startswith('disabled'):
+                        do_rollback_internal(os.path.join(root, file))
+                        found = True
+            if not found:
+                self.report({'ERROR'}, "롤백할 .ini 파일을 찾을 수 없습니다.")
+                return {'CANCELLED'}
+        else:
+            self.report({'ERROR'}, "유효하지 않은 경로입니다.")
             return {'CANCELLED'}
-            
-        with open(ini_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-            
-        custom_filename = None
-        in_extracted = False
-        for line in lines:
-            l = line.strip().lower()
-            if l == '[resourcecustomfaceextracted]':
-                in_extracted = True
-            elif l.startswith('[') and l.endswith(']'):
-                in_extracted = False
-                
-            if in_extracted and l.startswith('filename'):
-                parts = line.split('=', 1)
-                if len(parts) == 2:
-                    custom_filename = parts[1].strip()
-                    break
-                    
-        if not custom_filename:
-            self.report({'WARNING'}, "이 ini 파일은 연동된 흔적이 없어 롤백할 필요가 없습니다.")
-            return {'CANCELLED'}
-            
-        original_resource = None
-        current_res = None
-        for line in lines:
-            l = line.strip()
-            if l.startswith('[') and l.endswith(']'):
-                current_res = l[1:-1].strip()
-            elif current_res and current_res.lower() != 'resourcecustomfaceextracted' and l.lower().startswith('filename'):
-                parts = line.split('=', 1)
-                if len(parts) == 2 and parts[1].strip().lower() == custom_filename.lower():
-                    original_resource = current_res
-                    break
-                    
-        if not original_resource:
-            self.report({'ERROR'}, f"원본 버퍼({custom_filename})를 가리키는 기존 리소스를 찾을 수 없어 롤백에 실패했습니다.")
-            return {'CANCELLED'}
-            
-        out_lines = []
-        skip_mode = False
-        
-        for line in lines:
-            l = line.strip().lower()
-            
-            if l == "[customshaderfaceanimation]":
-                skip_mode = True
-                while len(out_lines) > 0:
-                    prev = out_lines[-1].strip()
-                    if prev == "" or prev.startswith(";"):
-                        out_lines.pop()
-                    else:
-                        break
-                continue
-                
-            if skip_mode:
-                continue
-                
-            if l.startswith("run ") and "customshaderfaceanimation" in l:
-                continue
-                
-            if l.startswith("vb0 ") or l.startswith("vb0="):
-                if "resourcefaceanimated" in l:
-                    indent = line[:len(line) - len(line.lstrip())]
-                    out_lines.append(f"{indent}vb0 = {original_resource}\n")
-                    continue
-                    
-            out_lines.append(line)
-            
-        with open(ini_path, 'w', encoding='utf-8') as f:
-            f.writelines(out_lines)
-            
-        mod_folder = os.path.dirname(ini_path)
-        for junk in ["FaceOriginalNeutral.buf", "FaceAnimationMap.buf", "FaceAnimation.hlsl"]:
-            junk_path = os.path.join(mod_folder, junk)
-            if os.path.exists(junk_path):
-                try:
-                    os.remove(junk_path)
-                except:
-                    pass
                     
         def draw_popup(self, context):
             self.layout.label(text="[연동 롤백 완료]", icon='INFO')
-            self.layout.label(text="ini 파일 복원 및 생성되었던 파일이 삭제되었습니다.")
+            self.layout.label(text="ini 파일 복원 및 생성되었던 애니메이션 파일들이 모두 삭제되었습니다.")
             
         context.window_manager.popup_menu(draw_popup, title="롤백 완료", icon='INFO')
         self.report({'INFO'}, "표정 연동이 롤백되었습니다.")
-        
         return {'FINISHED'}
 
 classes = (
     XXMI_OT_export_face_animation,
     XXMI_OT_file_picker,
+    XXMI_OT_dir_picker,
     XXMI_OT_rollback_face_animation,
 )
 

@@ -48,8 +48,8 @@ class XXMI_PG_face_anim_props(bpy.types.PropertyGroup):
     )
     
     target_ini: bpy.props.StringProperty(
-        name="타겟 모드 ini",
-        description="표정 연동을 적용할 타겟 모드의 메인 ini 파일을 선택하세요",
+        name="타겟 모드 폴더",
+        description="표정 연동을 적용할 타겟 모드의 폴더를 선택하세요 (하위 폴더의 모든 ini 자동 탐색)",
         subtype='NONE'
     )
     
