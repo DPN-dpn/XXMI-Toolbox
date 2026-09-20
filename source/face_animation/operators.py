@@ -493,7 +493,7 @@ class XXMI_OT_file_picker(bpy.types.Operator):
 class XXMI_OT_rollback_face_animation(bpy.types.Operator):
     bl_idname = "object.xxmi_rollback_face_animation"
     bl_label = "연동 롤백 (취소)"
-    bl_description = "이미 표정 연동이 적용된 타겟 모드의 ini 파일을 선택하여 연동을 취소(Rollback)합니다"
+    bl_description = "이미 표정 연동이 적용된 타겟 모드의 ini 파일을 선택하여 연동을 롤백합니다"
     
     filepath: bpy.props.StringProperty(subtype="FILE_PATH")
     filter_glob: bpy.props.StringProperty(default="*.ini", options={'HIDDEN'})

@@ -20,7 +20,15 @@ class XXMI_TOOLBOX_PT_separate_mesh_panel(bpy.types.Panel):
         row = layout.row()
         row.alignment = 'RIGHT'
         op = row.operator("object.xxmi_help_tooltip", text="", icon='QUESTION', emboss=False)
-        op.text = "버텍스 그룹과 엣지 연결성을 분석하여 하나의 메쉬를 여러 파츠로 쪼개고 컬렉션으로 깔끔하게 정리합니다"
+        op.text = (
+            "버텍스 그룹과 엣지 연결성을 분석하여 하나의 메쉬를 여러 파츠로 쪼개고 컬렉션으로 깔끔하게 정리합니다.\n\n"
+            "[사용 방법]\n"
+            "1. 분리할 대상 오브젝트를 지정합니다.\n"
+            "2. 필요한 경우 '메시 강제 분리' 옵션을 켭니다.\n"
+            "3. '분리 실행' 버튼을 누릅니다.\n\n"
+            "[프로퍼티]\n"
+            "- 메시 강제 분리: 메쉬가 연결되어 있더라도 버텍스 그룹만을 기준으로 강제로 분리합니다"
+        )
 
         layout.use_property_split = True
         layout.use_property_decorate = False

@@ -5,11 +5,12 @@ class XXMI_PT_face_animation(bpy.types.Panel):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = 'XXMI Toolbox'
+    bl_order = 4
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw_header(self, context):
         layout = self.layout
-        layout.label(text="얼굴 표정 연동", icon='FACESEL')
+        layout.label(text="얼굴 표정 연동", icon='USER')
 
     def draw(self, context):
         layout = self.layout

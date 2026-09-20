@@ -20,7 +20,15 @@ class XXMI_TOOLBOX_PT_shadow_panel(bpy.types.Panel):
         row = layout.row()
         row.alignment = 'RIGHT'
         op = row.operator("object.xxmi_help_tooltip", text="", icon='QUESTION', emboss=False)
-        op.text = "타겟 오브젝트를 그림자 오브젝트로 변환합니다"
+        op.text = (
+            "타겟 오브젝트를 그림자 오브젝트로 변환합니다.\n\n"
+            "[사용 방법]\n"
+            "1. 그림자 메쉬로 변환할 타겟 오브젝트를 지정합니다.\n"
+            "2. 필요한 경우 그림자 오프셋 수치를 조절합니다.\n"
+            "3. '변환 실행' 버튼을 누릅니다.\n\n"
+            "[프로퍼티]\n"
+            "- 그림자 오프셋: 생성되는 그림자 메쉬가 원본 메쉬에서 얼마나 떨어질지 결정합니다. 그림자 거리를 결정합니다"
+        )
 
         layout.use_property_split = True
         layout.use_property_decorate = False
